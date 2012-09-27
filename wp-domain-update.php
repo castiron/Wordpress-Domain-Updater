@@ -55,7 +55,7 @@ class CicWpDomainUpdate {
 		$this->messageUser('	-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_'."\n");
 
 		$this->messageUser('	I am going to update every field in every table that I can within the Wordpress database from');
-		$this->messageUser('	the config file specified and modify the definition of "DOMAIN_CURRENT_SITE" in the wp-config.php');
+		$this->messageUser('	the config file specified, and also modify the definition of "DOMAIN_CURRENT_SITE" in the wp-config.php');
 		$this->messageUser('	file specified, if it is found there.');
 
 		// Get the config
@@ -94,8 +94,7 @@ class CicWpDomainUpdate {
 		$this->messageUser('Are you certain you wish to proceed (Y/n)?: ', false);
 		$confirm = trim(fgets(STDIN));
 		if($this->convertToBool($confirm) || $confirm === '') {
-			$this->messageUser('Alrighty.  Proceeding with the domain update');
-
+			$this->messageUser('Alrighty.  Proceeding with the domain update...');
 
 			$this->updateDb();
 			$this->updateConfig();
@@ -111,7 +110,7 @@ class CicWpDomainUpdate {
 	 */
 	protected function updateConfig() {
 		$contents = file_get_contents($this->configFile);
-		if($newContents = preg_replace('/define([ \n\r\t]*[\'\"]DOMAIN_CURRENT_SITE[\'\"],[ \n\r\t]*[\'\"][^\'\"][\'\"][ \n\r\t]*);/', $this->newDomain, $contents)) {
+		if($newContents = preg_replace('/'.str_replace('.','\.',$this->oldDomain).'/', $this->newDomain, $contents)) {
 			$h = fopen($this->configFile, 'w');
 			fwrite($h, $newContents);
 			fclose($h);
@@ -156,19 +155,21 @@ class CicWpDomainUpdate {
 		$i = 0;
 		foreach($tables as $table) {
 			$fields = $this->getFields($table);
-
+			$affectedRows = 0;
 			if(count($fields) > 0) {
-				print 'Updating table "'.$table.'"'."\n";
+				$this->messageUser('Updating table "' . $table . '" ',false);
 
 				foreach($fields as $field) {
 					$fieldName = $field['Field'];
 					if($this->oldDomain && $this->newDomain) {
 						// TODO: add number of affected rows
 						mysql_query('UPDATE '.$table.' SET '.$fieldName.' = REPLACE('.$fieldName.',\''.$this->oldDomain.'\',\''.$this->newDomain.'\')');
+						$affectedRows += mysql_affected_rows();
 						$i++;
 					}
 				}
 			}
+			$this->messageUser('(' . mysql_affected_rows() . ' rows affected)');
 		}
 		$this->messageUser(
 			'Executed '.$i.' queries. '.
