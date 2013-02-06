@@ -13,4 +13,4 @@ cd path/to/your/wordpress/webroot/;
 php ./wp-domain-update.php
 ```
 
-Follow the instructions.
+Follow the instructions, then: `rm ./wp-domain-update.php`
