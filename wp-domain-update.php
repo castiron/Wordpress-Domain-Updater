@@ -323,16 +323,16 @@ class CicWpDomainUpdate {
 		$contents = preg_replace('/require_once\([^\)]*\);/', '', file_get_contents($configPath));
 		$raw = preg_replace('/<\?(php)?/', '', $contents);
 		eval($raw);
-		$this->dbHost = DB_HOST;
-		$this->dbUser = DB_USER;
-		$this->dbName = DB_NAME;
-		$this->dbPassword = DB_PASSWORD;
 		if(
-			$this->dbHost &&
-			$this->dbUser &&
-			$this->dbName &&
-			$this->dbPassword
+			DB_NAME &&
+			defined('DB_HOST') && 
+			defined('DB_USER') && 
+			defined('DB_PASSWORD')
 		) {
+			$this->dbHost = DB_HOST;
+			$this->dbUser = DB_USER;
+			$this->dbName = DB_NAME;
+			$this->dbPassword = DB_PASSWORD;
 			$this->oldDomainCurrentSite = DOMAIN_CURRENT_SITE;
 			$this->configFile = $configPath;
 		} else {
