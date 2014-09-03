@@ -24,13 +24,6 @@ class CicWpDomainUpdate {
 	var $dbName;
 	var $oldDomain;
 	var $newDomain;
-	var $oldDomainCurrentSite;
-	var $configFile;
-
-	var $shouldBackUp;
-	var $backupLocation;
-
-	const BACKUP_FOLDER_NAME = '_wp_backup';
 
 	var $db; // The db connection
 
@@ -58,28 +51,28 @@ class CicWpDomainUpdate {
 		$this->messageUser('	the config file specified, and also modify the definition of "DOMAIN_CURRENT_SITE" in the wp-config.php');
 		$this->messageUser('	file specified, if it is found there.');
 
-		// Get the config
-		$this->getWpConfig();
+		// Prompt for the required params
+		$this->dbHost = $this->getWhoopyParam('Type in the database host: ');
+		$this->dbUser = $this->getWhoopyParam('Type in the database user: ');
+		$this->dbPassword = $this->getWhoopyParam('Type in the databsse password: ');
+		$this->dbName = $this->getWhoopyParam('Type in the database name: ');
+		$this->oldDomain = $this->getWhoopyParam('Type in the current (old) domain: ');
+		$this->newDomain = $this->getWhoopyParam('Type in the new domain: ');
+
+		$confirmDetails = array(
+			'Database host: ' => $this->dbHost,
+			'Database username: ' => $this->dbUser,
+			'Database password: ' => $this->dbPassword,
+			'Database name: ' => $this->dbName,
+			'Replacing action: '=> $this->newDomain.' (new) --> '.$this->oldDomain.' (old)'
+		);
+		foreach ($confirmDetails as $type => $value) {
+			$this->messageUser($type.$value);
+		}
+		$this->confirmAction('Is the above correct?');
 
 		// Connect to the database
 		$this->connectDb();
-
-		// Get the domains
-		$this->getOldDomain();
-		$this->getNewDomain();
-
-		$this->getShouldBackUp();
-		if($this->shouldBackUp) {
-			$this->backupLocation = $this->getBackupLocation();
-			$this->messageUser('Ok. Attempting to back up to a folder here in your working directory: '.$this->backupLocation . '/');
-			$this->backUp();
-			$this->messageUser('Ok. Backed up your database and config file.');
-		} else {
-			$this->messageUser('*************************************');
-			$this->messageUser('	Mmmmkay. THERE WILL BE NO BACK UP OF THE DATABASE. IF YOU HAVE NOT BACKED UP YOUR DATABASE');
-			$this->messageUser('	AND wp-config.php FILE YET, YOU SHOULD QUIT THIS SCRIPT (CTRL-c) AND BACK THOSE UP FIRST, YOU GUYS!!!!');
-			$this->messageUser('*************************************');
-		}
 
 		// Perform the database and file updates
 		$this->messageUser('Ok. I\'m about to rather blindly replace all instances of "'.$this->oldDomain.'" with "'.$this->newDomain.'"');
@@ -87,34 +80,37 @@ class CicWpDomainUpdate {
 	}
 
 	/**
-	 * Make the changes
+	 * Gets user input from stdin
+	 * @param $message
+	 * @return string
 	 */
-	protected function performUpdate() {
-		// First, confirm:
-		$this->messageUser('Are you certain you wish to proceed (Y/n)?: ', false);
+	private function getWhoopyParam($message) {
+		$this->messageUser($message,false);
+		$input = trim(fgets(STDIN));
+		return $input;
+	}
+
+	/**
+	 * Prompts user to confirm; Exits script if not confirmed
+	 * @param $message
+	 */
+	private function confirmAction($message='Are you certain you wish to proceed (Y/n)?:') {
+		$this->messageUser($message, false);
 		$confirm = trim(fgets(STDIN));
 		if($this->convertToBool($confirm) || $confirm === '') {
-			$this->messageUser('Alrighty.  Proceeding with the domain update...');
-
-			$this->updateDb();
-			$this->updateConfig();
-
+			$this->messageUser('Alrighty.  Proceeding...');
 		} else {
 			$this->messageUser('Ok. Never mind, then - I\'m stopping here - no harm done.');
 			exit();
 		}
 	}
-
 	/**
- 	 * Update the wp-config.php file
+	 * Make the changes
 	 */
-	protected function updateConfig() {
-		$contents = file_get_contents($this->configFile);
-		if($newContents = preg_replace('/'.str_replace('.','\.',$this->oldDomain).'/', $this->newDomain, $contents)) {
-			$h = fopen($this->configFile, 'w');
-			fwrite($h, $newContents);
-			fclose($h);
-		}
+	protected function performUpdate() {
+		// First, confirm:
+		$this->confirmAction();
+		$this->updateDb();
 	}
 
 	/**
@@ -194,43 +190,6 @@ class CicWpDomainUpdate {
 	}
 
 	/**
-	 * Backs up the database and wp-config.php file to $this->backupLocation
-	 */
-	protected function backUp() {
-		exec('mkdir -p ' . $this->backupLocation); // Create the folder to hold the backups
-		if (is_dir($this->backupLocation)) {
-			// Use mysqldump to back up the database
-			$dbBackupFile = $this->backupLocation.'/'.$this->dbName . '.sql';
-			exec('mysqldump -u' . $this->dbUser . ' -h' . $this->dbHost . ' -p' . $this->dbPassword . ' ' . $this->dbName . ' > '.$dbBackupFile.' 2>&1');
-			if (!file_exists($dbBackupFile)) {
-				$this->fatalError('ERROR: could not back up database to ' . $dbBackupFile . ' for some reason. Exiting!');
-			}
-
-			// Copy wp-config.php to backup location
-			exec('cp ' . $this->configFile . ' ' . $this->backupLocation . '/');
-		} else {
-			$this->fatalError('Could not create backup folder at ' . $this->backupLocation);
-		}
-	}
-
-	/**
-	 * @return string
-	 */
-	protected function getBackupLocation() {
-		return getcwd(). '/' . self::BACKUP_FOLDER_NAME . '/' . strftime('%Y-%m-%d-%s');
-	}
-
-	/**
- 	 *
-	 */
-	protected function getShouldBackUp() {
-		$this->shouldBackUp = true;
-		$this->messageUser('Should I attempt to back up your database and wp-config.php file first (Y/n):',false);
-		$input = trim(fgets(STDIN));
-		if($input) $this->shouldBackUp = $this->convertToBool($input);
-	}
-
-	/**
 	 * @param $input
 	 * @return bool
 	 */
@@ -246,51 +205,6 @@ class CicWpDomainUpdate {
 		return $out;
 	}
 
-	/**
- 	 * Get the new domain name from the user
-	 */
-	protected function getNewDomain() {
-		$domain = '';
-		while(!$domain) {
-			$this->messageUser('What is the new domain?:',false);
-			$domain = trim(fgets(STDIN));
-		}
-		$this->newDomain = $domain;
-	}
-
-	/**
-	 * Get the filename of the first found file called 'wp-config.php' in or below the current working directory
-	 *
-	 * @return mixed
-	 */
-	protected function findConfigFileCandidate() {
-		$out = false;
-		$it = new RecursiveDirectoryIterator(getcwd());
-		foreach(new RecursiveIteratorIterator($it) as $file) {
-			$fileName = $file->getFileName();
-			$path = $file->getPathname();
-			if (preg_match('/wp-config\.php/', $fileName) && !preg_match('/'.self::BACKUP_FOLDER_NAME.'/',$path)) {
-				$out = $path;
-				break; // Break on the first one
-			}
-		}
-		return $out;
-	}
-
-	/**
- 	 * Get the old domain name from the user
-	 */
-	protected function getOldDomain() {
-		$domain = '';
-		while(!$domain) {
-			$this->messageUser('Enter the domain name that you want to change ("'.$this->oldDomainCurrentSite.'"):',false);
-			$domain = trim(fgets(STDIN));
-			if (!$domain && $this->oldDomainCurrentSite) {
-				$domain = $this->oldDomainCurrentSite; // Use the DOMAIN_CURRENT_SITE setting from wp-config.php
-			}
-		}
-		$this->oldDomain = $domain;
-	}
 
 	/**
 	 * @param $msg
@@ -298,47 +212,6 @@ class CicWpDomainUpdate {
 	 */
 	protected function messageUser($msg, $newline = true) {
 		echo $msg . ($newline ? "\n" : '');
-	}
-
-	/**
- 	 * Get the location of the wp-config.php file as user input and includes it in the global scope.
-	 */
-	protected function getWpConfig() {
-		$configPath = '';
-		$configFileCandidate = $this->findConfigFileCandidate();
-		if(file_exists($configFileCandidate)) {
-			while(!file_exists($configPath)) {
-				$this->messageUser('Please enter the path to your wp-config file ('.$configFileCandidate.'): ',false);
-				$configPath = trim(fgets(STDIN));
-				if (!$configPath) {
-					$configPath = $configFileCandidate;
-				}
-			}
-		} else {
-			while(!file_exists($configPath)) {
-				$this->messageUser('Please enter the path to your wp-config file: ',false);
-				$configPath = trim(fgets(STDIN));
-			}
-		}
-		$contents = preg_replace('/require_once\([^\)]*\);/', '', file_get_contents($configPath));
-		$raw = preg_replace('/<\?(php)?/', '', $contents);
-		eval($raw);
-		if(
-			DB_NAME &&
-			defined('DB_HOST') && 
-			defined('DB_USER') && 
-			defined('DB_PASSWORD')
-		) {
-			$this->dbHost = DB_HOST;
-			$this->dbUser = DB_USER;
-			$this->dbName = DB_NAME;
-			$this->dbPassword = DB_PASSWORD;
-			$this->oldDomainCurrentSite = DOMAIN_CURRENT_SITE;
-			$this->configFile = $configPath;
-		} else {
-			$this->fatalError('Could not determine DB credentials from config file provided');
-		}
-		return true;
 	}
 
 
