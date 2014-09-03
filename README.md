@@ -1,5 +1,7 @@
 # Wordpress Domain Updater
 
+For Wordpress multi-site installations.
+
 This script attempts to update the hard-coded domain (or domain/path combo) of a Wordpress installation.  Note that its main function is to perform a find/replace within the Wordpress database.
 
 ## Usage
